@@ -1,0 +1,220 @@
+diff --git a/src/video_core/engines/engine_interface.h b/src/video_core/engines/engine_interface.h
+index da7ee6d..05d1d5a 100644
+--- a/src/video_core/engines/engine_interface.h
++++ b/src/video_core/engines/engine_interface.h
+@@ -7,6 +7,7 @@
+ 
+ #include <bitset>
+ #include <limits>
++#include <type_traits>
+ #include <vector>
+ 
+ #include "common/common_types.h"
+@@ -30,6 +31,13 @@ class EngineInterface {
+ public:
+     virtual ~EngineInterface() = default;
+ 
++    /// Linux build patch: which engine this is. Fritchii v6 tells the engines apart with
++    /// dynamic_cast, which needs RTTI; GCC and Clang builds use -fno-rtti (src/CMakeLists.txt).
++    /// EngineCast below does the same check with this instead.
++    [[nodiscard]] virtual EngineTypes EngineType() const noexcept {
++        return EngineTypes::Nv01Timer;
++    }
++
+     /// Write the value to the register identified by method.
+     virtual void CallMethod(Core::System& system, u32 method, u32 method_argument, bool is_last_call) = 0;
+ 
+@@ -91,4 +99,13 @@ protected:
+     }
+ };
+ 
++/// Linux build patch: dynamic_cast<T*>(engine) without RTTI, for the engine classes that report
++/// their type (all of them are final, so the type alone decides).
++template <typename T, typename E>
++[[nodiscard]] T* EngineCast(E* engine) noexcept {
++    return engine != nullptr && engine->EngineType() == std::remove_cv_t<T>::engine_type_value
++               ? static_cast<T*>(engine)
++               : nullptr;
++}
++
+ } // namespace Tegra::Engines
+diff --git a/src/video_core/engines/fermi_2d.h b/src/video_core/engines/fermi_2d.h
+index a9a5ac5..0c6e76e 100644
+--- a/src/video_core/engines/fermi_2d.h
++++ b/src/video_core/engines/fermi_2d.h
+@@ -39,6 +39,11 @@ class SoftwareBlitEngine;
+ 
+ class Fermi2D final : public EngineInterface {
+ public:
++    static constexpr EngineTypes engine_type_value = EngineTypes::Fermi2D; // Linux build patch: EngineCast
++    [[nodiscard]] EngineTypes EngineType() const noexcept override {
++        return engine_type_value;
++    }
++
+     explicit Fermi2D(MemoryManager& memory_manager_);
+     ~Fermi2D() override;
+ 
+diff --git a/src/video_core/engines/kepler_compute.h b/src/video_core/engines/kepler_compute.h
+index 868ca79..4d8f9ae 100644
+--- a/src/video_core/engines/kepler_compute.h
++++ b/src/video_core/engines/kepler_compute.h
+@@ -76,6 +76,11 @@ extern std::atomic<u32> g_nx2_trace_draws_after_upscale;
+ 
+ class KeplerCompute final : public EngineInterface {
+ public:
++    static constexpr EngineTypes engine_type_value = EngineTypes::KeplerCompute; // Linux build patch: EngineCast
++    [[nodiscard]] EngineTypes EngineType() const noexcept override {
++        return engine_type_value;
++    }
++
+     explicit KeplerCompute(MemoryManager& memory_manager);
+     ~KeplerCompute();
+ 
+diff --git a/src/video_core/engines/kepler_memory.h b/src/video_core/engines/kepler_memory.h
+index 6d9bb06..de28799 100644
+--- a/src/video_core/engines/kepler_memory.h
++++ b/src/video_core/engines/kepler_memory.h
+@@ -38,6 +38,11 @@ namespace Tegra::Engines {
+ 
+ class KeplerMemory final : public EngineInterface {
+ public:
++    static constexpr EngineTypes engine_type_value = EngineTypes::KeplerMemory; // Linux build patch: EngineCast
++    [[nodiscard]] EngineTypes EngineType() const noexcept override {
++        return engine_type_value;
++    }
++
+     explicit KeplerMemory(MemoryManager& memory_manager);
+     ~KeplerMemory() override;
+ 
+diff --git a/src/video_core/engines/maxwell_3d.h b/src/video_core/engines/maxwell_3d.h
+index e233856..edec044 100644
+--- a/src/video_core/engines/maxwell_3d.h
++++ b/src/video_core/engines/maxwell_3d.h
+@@ -69,6 +69,11 @@ namespace Tegra::Engines {
+ 
+ class Maxwell3D final : public EngineInterface {
+ public:
++    static constexpr EngineTypes engine_type_value = EngineTypes::Maxwell3D; // Linux build patch: EngineCast
++    [[nodiscard]] EngineTypes EngineType() const noexcept override {
++        return engine_type_value;
++    }
++
+     explicit Maxwell3D(MemoryManager& memory_manager);
+     ~Maxwell3D();
+ 
+diff --git a/src/video_core/engines/maxwell_dma.h b/src/video_core/engines/maxwell_dma.h
+index 6c0be14..4740368 100644
+--- a/src/video_core/engines/maxwell_dma.h
++++ b/src/video_core/engines/maxwell_dma.h
+@@ -104,6 +104,11 @@ public:
+ 
+ class MaxwellDMA final : public EngineInterface {
+ public:
++    static constexpr EngineTypes engine_type_value = EngineTypes::MaxwellDMA; // Linux build patch: EngineCast
++    [[nodiscard]] EngineTypes EngineType() const noexcept override {
++        return engine_type_value;
++    }
++
+     struct PackedGPUVAddr {
+         u32 upper;
+         u32 lower;
+diff --git a/src/video_core/fritchii_e_split.cpp b/src/video_core/fritchii_e_split.cpp
+index 99ab0e4..17441b6 100644
+--- a/src/video_core/fritchii_e_split.cpp
++++ b/src/video_core/fritchii_e_split.cpp
+@@ -970,10 +970,10 @@ EngineKind KindOf(const Tegra::Engines::EngineInterface* engine) noexcept {
+     g_kind_engine = engine;
+     if (engine == nullptr) {
+         g_kind = EngineKind::None;
+-    } else if (const auto* maxwell3d = dynamic_cast<const Maxwell3D*>(engine)) {
++    } else if (const auto* maxwell3d = Tegra::Engines::EngineCast<const Maxwell3D>(engine)) {
+         g_kind = EngineKind::Maxwell3D;
+         g_engine3d = maxwell3d;
+-    } else if (dynamic_cast<const Tegra::Engines::KeplerCompute*>(engine) != nullptr) {
++    } else if (Tegra::Engines::EngineCast<const Tegra::Engines::KeplerCompute>(engine) != nullptr) {
+         g_kind = EngineKind::Compute;
+     } else {
+         g_kind = EngineKind::Other;
+diff --git a/src/video_core/gpu_split.cpp b/src/video_core/gpu_split.cpp
+index 374dcb7..128903d 100644
+--- a/src/video_core/gpu_split.cpp
++++ b/src/video_core/gpu_split.cpp
+@@ -2113,7 +2113,7 @@ void GpuSplit::MacroWords(Tegra::Engines::EngineInterface* engine, u32 method, c
+     // Not for the 3D engine: the memory stage applies a Multi entry to its 3D copy as a
+     // multi-method and ignores the Direct bit (memstage_shadow.cpp, Kind::Multi), while the
+     // back calls every word as a Direct write. A 3D engine's words go one MacroWrite each.
+-    if (dynamic_cast<const Tegra::Engines::Maxwell3D*>(engine) != nullptr) [[unlikely]] {
++    if (Tegra::Engines::EngineCast<const Tegra::Engines::Maxwell3D>(engine) != nullptr) [[unlikely]] {
+         ASSERT_MSG(false, "GpuSplit::MacroWords is not for the 3D engine");
+         for (u32 i = 0; i < amount; ++i) {
+             MacroWrite(engine, method, words[i], effect);
+@@ -4038,7 +4038,7 @@ void GpuSplit::VerifyCbWords(const u64* words, u32 count, u64 front_address) {
+             done += static_cast<u32>(Execute(words + done, count - done));
+         }
+     };
+-    auto* const maxwell3d = dynamic_cast<Maxwell3D*>(back_engine);
++    auto* const maxwell3d = Tegra::Engines::EngineCast<Maxwell3D>(back_engine);
+     if (maxwell3d == nullptr) {
+         CbBump(cb_back.apply_skipped);
+         run_block();
+@@ -4214,7 +4214,7 @@ void GpuSplit::ExecuteCbJoined(const u64* words, u32 count) {
+             back_engine->ConsumeSink(*system);
+ #if defined(_CPPRTTI) || defined(__GXX_RTTI)
+             // Diagnostic only; builds without RTTI (Linux) don't compare.
+-            if (auto* const maxwell3d = dynamic_cast<Maxwell3D*>(back_engine)) {
++            if (auto* const maxwell3d = Tegra::Engines::EngineCast<Maxwell3D>(back_engine)) {
+                 const auto& regs = maxwell3d->regs;
+                 const GPUVAddr back_address =
+                     regs.const_buffer.Address() + regs.const_buffer.offset;
+diff --git a/src/video_core/memstage_shadow.cpp b/src/video_core/memstage_shadow.cpp
+index 55d0a57..e758d22 100644
+--- a/src/video_core/memstage_shadow.cpp
++++ b/src/video_core/memstage_shadow.cpp
+@@ -1056,16 +1056,16 @@ Copy* FindCopy(State& s, Maxwell3D* back) {
+ }
+ 
+ EngineType TypeOf(Tegra::Engines::EngineInterface* engine) {
+-    if (dynamic_cast<Tegra::Engines::KeplerCompute*>(engine) != nullptr) {
++    if (Tegra::Engines::EngineCast<Tegra::Engines::KeplerCompute>(engine) != nullptr) {
+         return EngineType::KeplerCompute;
+     }
+-    if (dynamic_cast<Tegra::Engines::KeplerMemory*>(engine) != nullptr) {
++    if (Tegra::Engines::EngineCast<Tegra::Engines::KeplerMemory>(engine) != nullptr) {
+         return EngineType::KeplerMemory;
+     }
+-    if (dynamic_cast<Tegra::Engines::MaxwellDMA*>(engine) != nullptr) {
++    if (Tegra::Engines::EngineCast<Tegra::Engines::MaxwellDMA>(engine) != nullptr) {
+         return EngineType::MaxwellDMA;
+     }
+-    if (dynamic_cast<Tegra::Engines::Fermi2D*>(engine) != nullptr) {
++    if (Tegra::Engines::EngineCast<Tegra::Engines::Fermi2D>(engine) != nullptr) {
+         return EngineType::Fermi2D;
+     }
+     return EngineType::Other;
+@@ -3101,7 +3101,7 @@ size_t Process(State& s, u64 position, bool executed) {
+         auto* const engine = reinterpret_cast<Tegra::Engines::EngineInterface*>(entry[1]);
+         s.engine = engine;
+         s.engine_copy = nullptr;
+-        if (auto* const maxwell3d = dynamic_cast<Maxwell3D*>(engine)) {
++        if (auto* const maxwell3d = Tegra::Engines::EngineCast<Maxwell3D>(engine)) {
+             s.engine_copy = FindCopy(s, maxwell3d);
+         } else {
+             s.engine_type = TypeOf(engine);
+@@ -3838,7 +3838,7 @@ void StageStart(s32 channel) {
+     // The engine the back runs now: entries before the next engine entry are its.
+     if (Tegra::Engines::EngineInterface* const engine = Access::BackEngine()) {
+         s.engine = engine;
+-        if (auto* const maxwell3d = dynamic_cast<Maxwell3D*>(engine)) {
++        if (auto* const maxwell3d = Tegra::Engines::EngineCast<Maxwell3D>(engine)) {
+             s.engine_copy = FindCopy(s, maxwell3d);
+         } else {
+             s.engine_type = TypeOf(engine);
+@@ -3875,7 +3875,7 @@ bool StageExtendsRun(u64 position) {
+     case Kind::Wrap:
+         return true;
+     case Kind::Engine:
+-        return dynamic_cast<Maxwell3D*>(
++        return Tegra::Engines::EngineCast<Maxwell3D>(
+                    reinterpret_cast<Tegra::Engines::EngineInterface*>(entry[1])) == nullptr;
+     case Kind::Call:
+         switch (StageTagOf(head)) {
