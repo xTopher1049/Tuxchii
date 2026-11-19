@@ -440,18 +440,23 @@ jobs:
           sha256sum "$APPIMAGE" > "$APPIMAGE.sha256"
           export VER="${TAG#$TAG_PREFIX}" COMMIT="$(git rev-parse --short HEAD)"
           export SHA256="$(cut -d' ' -f1 "$APPIMAGE.sha256")" CLASSIC="${CLASSIC_UI_DEFAULT:-0}"
+          # The real minimum glibc: the newest GLIBC_x.y symbol version any bundled file needs.
+          glibc=$(find AppDir -type f \( -name '*.so*' -o -perm -u+x \) -exec objdump -T {} + 2>/dev/null |
+                  grep -oE 'GLIBC_2\.[0-9]+' | sort -uV | tail -1 | sed 's/^GLIBC_//' || true)
+          export GLIBC_MIN="${glibc:-2.39}"
+          echo "needs glibc $GLIBC_MIN"
           # Frizti's own release notes for this version (the changelog), if the release has any.
           gh api "repos/$UPSTREAM/releases/tags/$TAG" --jq .body > "$RUNNER_TEMP/upstream.md" 2>/dev/null ||
             : > "$RUNNER_TEMP/upstream.md"
           # Release notes: the same layout for every version. {{...}} are filled in below.
           cat > "$RUNNER_TEMP/notes.md" <<'EOF'
           ## Linux changes in this build
-          Fritchii is only tested on Windows, so these changes are made for Linux before compiling (all visible in the public build log and in [linux-patches]({{PATCHES}})):
+          These changes are made for Linux before compiling (all visible in the public build log and in [linux-patches]({{PATCHES}})):
           {{LINUX_BULLETS}}- **Compile fixes** for Windows-only code paths (X11 `Status` macro clash, Linux `GetExeDirectory()`, a Windows-only log variable), applied only where needed
 
           Tuxchii {{VER}}: a Linux x86_64 AppImage of [Fritchii {{VER}}](https://github.com/{{UPSTREAM}}/releases/tag/{{TAG}}), built automatically on GitHub from upstream commit `{{COMMIT}}`.
 
-          > ⚠️ Unofficial build. Fritchii only publishes Windows builds. Report Linux-specific problems here, not upstream.
+          > ⚠️ Unofficial build, not Frizti's. Fritchii also has its own Linux AppImage; this one is built on an older base, so it runs on more distros (it needs glibc {{GLIBC}}, see Requirements), and it has the Linux changes above. Report problems with this build here, not upstream.
           {{CLASSIC_SECTION}}
           ## Download
           **`{{APPIMAGE}}`**
@@ -469,7 +474,7 @@ jobs:
           If it complains about FUSE, run it with `--appimage-extract-and-run`.
 
           ## Requirements
-          - x86_64 Linux with **glibc 2.39+** (Ubuntu 24.04, Fedora 40, current Arch/SteamOS or newer)
+          - x86_64 Linux with **glibc {{GLIBC}} or newer** ({{GLIBC_DISTROS}}, current Arch/SteamOS or newer)
           - A GPU with a working **Vulkan** driver
 
           **NVIDIA tip:** the driver trims its shader cache at about 1 GB by default, which can bring back stutter. Add these two lines to `/etc/environment` and reboot:
@@ -529,8 +534,8 @@ jobs:
                           "the C++ runtime and Vulkan loader come from your system, so new GPU drivers load cleanly\n")
           if "tuxchii-updater.patch" in applied:
               bullets += (f"- **Updates from this repo:** Help → Check for Updates (and a check at startup) downloads the newest Tuxchii AppImage, "
-                          f"checks its SHA-256, replaces this one and restarts; the old version is kept for Roll Back. Fritchii's own updater "
-                          f"only installs its Windows build ([patch]({link('tuxchii-updater.patch')}))\n")
+                          f"checks its SHA-256, replaces this one and restarts; the old version is kept for Roll Back. It updates from this repo, "
+                          f"so you stay on Tuxchii instead of being switched to Fritchii's own build ([patch]({link('tuxchii-updater.patch')}))\n")
           if os.environ.get("TUXCHII_BRANDING") == "1":
               bullets += (f"- **Tuxchii name** in every window and dialog. Data folders, settings and saves are unchanged, "
                           f"so nothing moves ([script]({link('tuxchii-branding.py')}))\n")
@@ -557,7 +562,20 @@ jobs:
               changelog = (f"## What's new in Fritchii {os.environ['VER']}\n"
                            f"*From Frizti's [release notes](https://github.com/{os.environ['UPSTREAM']}/releases/tag/"
                            f"{os.environ['TAG']}) (Windows download instructions left out).*\n\n{changelog}\n\n")
+          # Distros whose glibc is new enough (oldest release of each listed).
+          need = tuple(int(x) for x in os.environ.get("GLIBC_MIN", "2.39").split("."))
+          distros = [d for d, v in (("Debian 12", (2, 36)), ("Ubuntu 22.04", (2, 35)), ("Debian 13", (2, 41)),
+                                     ("Ubuntu 24.04", (2, 39)), ("Fedora 40", (2, 39)), ("Fedora 42", (2, 41)))
+                     if v >= need]
+          seen = set(); glibc_distros = []
+          for d in sorted(distros, key=lambda d: dict((("Debian 12", 0), ("Debian 13", 1), ("Ubuntu 22.04", 2), ("Ubuntu 24.04", 3),
+                                                       ("Fedora 40", 4), ("Fedora 42", 5)))[d]):
+              family = d.split()[0]
+              if family not in seen:
+                  seen.add(family); glibc_distros.append(d)
           values = {
+              "GLIBC": os.environ.get("GLIBC_MIN", "2.39"),
+              "GLIBC_DISTROS": ", ".join(glibc_distros) or "a recent distro",
               "CHANGELOG": changelog,
               "VER": os.environ["VER"], "TAG": os.environ["TAG"], "UPSTREAM": os.environ["UPSTREAM"],
               "COMMIT": os.environ["COMMIT"], "SHA256": os.environ["SHA256"], "APPIMAGE": os.environ["APPIMAGE"],
