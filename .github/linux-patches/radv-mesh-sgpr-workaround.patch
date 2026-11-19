@@ -1,0 +1,97 @@
+diff --git a/src/shader_recompiler/backend/spirv/emit_spirv_mesh.cpp b/src/shader_recompiler/backend/spirv/emit_spirv_mesh.cpp
+index 973deaa..07e3a3f 100644
+--- a/src/shader_recompiler/backend/spirv/emit_spirv_mesh.cpp
++++ b/src/shader_recompiler/backend/spirv/emit_spirv_mesh.cpp
+@@ -306,8 +306,16 @@ void MeshEpilogue(EmitContext& ctx) {
+         return;
+     }
+     Barrier(ctx);
+-    const Id count{ctx.OpUMin(ctx.U32[1], ctx.OpLoad(ctx.U32[1], ctx.mesh_primitive_count),
+-                              ctx.Const(mesh.max_primitives))};
++    Id count{ctx.OpUMin(ctx.U32[1], ctx.OpLoad(ctx.U32[1], ctx.mesh_primitive_count),
++                        ctx.Const(mesh.max_primitives))};
++    if (Sirit::ValidId(ctx.mesh_num_workgroups)) {
++        // The grid size is never zero while a workgroup runs, so the count doesn't change; the
++        // read only has to survive the driver's optimisations (see DefineMesh).
++        const Id groups{ctx.OpCompositeExtract(
++            ctx.U32[1], ctx.OpLoad(ctx.U32[3], ctx.mesh_num_workgroups), 0U)};
++        count = ctx.OpSelect(ctx.U32[1], ctx.OpIEqual(ctx.U1, groups, ctx.u32_zero_value),
++                             ctx.u32_zero_value, count);
++    }
+     const Id max_vertices{ctx.Const(mesh.max_vertices)};
+     // Marker for OpSetMeshOutputsEXT max_vertices, count (PatchMeshInstructions).
+     ctx.OpStore(max_vertices, count);
+diff --git a/src/shader_recompiler/backend/spirv/spirv_emit_context.cpp b/src/shader_recompiler/backend/spirv/spirv_emit_context.cpp
+index 1b15df4..e8afafb 100644
+--- a/src/shader_recompiler/backend/spirv/spirv_emit_context.cpp
++++ b/src/shader_recompiler/backend/spirv/spirv_emit_context.cpp
+@@ -2075,6 +2075,14 @@ void EmitContext::DefineMesh(const IR::Program& program) {
+     if (as_compute) {
+         return; // the output buffer: DefineMeshEmulationOutput, after the storage buffers
+     }
++    if (profile.has_broken_mesh_user_sgprs) {
++        // On GFX11+, RADV gives a mesh shader user SGPRs only for the grid size and the draw
++        // index. Without them, binding the shader keeps the last vertex shader's draw index
++        // state, and the next mesh draw writes a SET_SH_REG packet that declares more registers
++        // than it holds: the command processor then hangs. MeshEpilogue reads this variable.
++        mesh_num_workgroups = DefineVariable(*this, U32[3], spv::BuiltIn::NumWorkgroups,
++                                             spv::StorageClass::Input);
++    }
+ 
+     const Id vertex_count{Const(mesh_info.max_vertices)};
+     const Id primitive_count{Const(mesh_info.max_primitives)};
+diff --git a/src/shader_recompiler/backend/spirv/spirv_emit_context.h b/src/shader_recompiler/backend/spirv/spirv_emit_context.h
+index 7c7657b..9514590 100644
+--- a/src/shader_recompiler/backend/spirv/spirv_emit_context.h
++++ b/src/shader_recompiler/backend/spirv/spirv_emit_context.h
+@@ -437,6 +437,8 @@ public:
+     Id mesh_task_offsets_buffer{};
+     Id mesh_task_args_buffer{};
+     Id mesh_group_index{};
++    /// NumWorkgroups of a native mesh program (Profile::has_broken_mesh_user_sgprs only).
++    Id mesh_num_workgroups{};
+ 
+     Id load_const_func_u8{};
+     Id load_const_func_u16{};
+diff --git a/src/shader_recompiler/profile.h b/src/shader_recompiler/profile.h
+index 64946f2..d0adc63 100644
+--- a/src/shader_recompiler/profile.h
++++ b/src/shader_recompiler/profile.h
+@@ -124,6 +124,10 @@ struct Profile {
+ 
+     /// Maxwell and earlier nVidia architectures have broken robust support
+     bool has_broken_robust{};
++    /// RADV before Mesa 26.2.5 keeps stale vertex user SGPR state when a mesh shader without the
++    /// grid size or draw index is bound, and the next mesh draw hangs the GPU (Mesa MR 45092).
++    /// Native mesh shaders read the grid size there so that RADV gives them that SGPR.
++    bool has_broken_mesh_user_sgprs{};
+ 
+     u64 min_ssbo_alignment{};
+     u32 max_user_clip_distances{};
+diff --git a/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp b/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp
+index 55e6377..2ebdbcb 100644
+--- a/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp
++++ b/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp
+@@ -1064,6 +1064,11 @@ PipelineCache::PipelineCache(Tegra::MaxwellDeviceMemoryManager& device_memory_,
+         .max_subgroup_size = device.GetMaxSubgroupSize(),
+         .has_broken_robust =
+             device.IsNvidia() && device.GetNvidiaArch() <= NvidiaArchitecture::Arch_Pascal,
++        // Mesa MR 45092 ("radv: Clear stale vertex user SGPR state when binding mesh shaders"),
++        // in 26.2.5. Only GFX11+ is affected, but the workaround costs one SGPR read anywhere.
++        // Backported from Lichii PR #1203.
++        .has_broken_mesh_user_sgprs = driver_id == VK_DRIVER_ID_MESA_RADV &&
++                                      device.GetDriverVersion() < VK_MAKE_VERSION(26, 2, 5),
+         .min_ssbo_alignment = device.GetStorageBufferAlignment(),
+         .max_user_clip_distances = device.GetMaxUserClipDistances()
+     };
+@@ -1079,6 +1084,10 @@ PipelineCache::PipelineCache(Tegra::MaxwellDeviceMemoryManager& device_memory_,
+     } else if (profile.support_cooperative_hmma_8x16x16) {
+         LOG_INFO(Render_Vulkan, "Guest tensor operations run on 8x16x16 cooperative matrices");
+     }
++    if (profile.has_broken_mesh_user_sgprs) {
++        LOG_INFO(Render_Vulkan, "RADV before 26.2.5: native mesh shaders read the grid size to "
++                                "avoid the stale mesh user SGPR hang");
++    }
+ 
+     host_info = Shader::HostTranslateInfo{
+         .min_ssbo_alignment = device.GetStorageBufferAlignment(),
