@@ -1,8 +1,8 @@
 diff --git a/src/video_core/CMakeLists.txt b/src/video_core/CMakeLists.txt
-index bf83c1b..bcc8a75 100644
+index 318beaf..395973a 100644
 --- a/src/video_core/CMakeLists.txt
 +++ b/src/video_core/CMakeLists.txt
-@@ -638,4 +638,23 @@ if (ENABLE_NVIDIA_DLSS)
+@@ -673,4 +673,23 @@ if (ENABLE_NVIDIA_DLSS)
      message(STATUS "NVIDIA DLSS through Streamline: ${STREAMLINE_INCLUDE_DIR}")
  endif()
  
@@ -27,10 +27,10 @@ index bf83c1b..bcc8a75 100644
 +
  create_target_directory_groups(video_core)
 diff --git a/src/video_core/renderer_vulkan/vk_ocarina_camera_motion.cpp b/src/video_core/renderer_vulkan/vk_ocarina_camera_motion.cpp
-index de1a0ab..e33a232 100644
+index b918b8d..144ff8c 100644
 --- a/src/video_core/renderer_vulkan/vk_ocarina_camera_motion.cpp
 +++ b/src/video_core/renderer_vulkan/vk_ocarina_camera_motion.cpp
-@@ -22,6 +22,10 @@
+@@ -28,6 +28,10 @@
  #include "video_core/host_shaders/ocarina_dlss_effects_comp_spv.h"
  #include "video_core/renderer_vulkan/vk_master_semaphore.h"
  #ifdef EGLANTINE_STREAMLINE
@@ -864,7 +864,7 @@ index 0000000..7e2866f
 +
 +} // namespace Vulkan::Streamline
 diff --git a/src/yuzu/CMakeLists.txt b/src/yuzu/CMakeLists.txt
-index 3528b26..41d0d81 100644
+index 369e9e0..d6d92bd 100644
 --- a/src/yuzu/CMakeLists.txt
 +++ b/src/yuzu/CMakeLists.txt
 @@ -78,6 +78,7 @@ add_executable(yuzu
@@ -876,10 +876,10 @@ index 3528b26..41d0d81 100644
      configuration/configure_graphics_advanced.cpp
      configuration/configure_graphics_advanced.h
 diff --git a/src/yuzu/configuration/configure_graphics.cpp b/src/yuzu/configuration/configure_graphics.cpp
-index 36ba1f3..e9e7405 100644
+index 2560c85..1753332 100644
 --- a/src/yuzu/configuration/configure_graphics.cpp
 +++ b/src/yuzu/configuration/configure_graphics.cpp
-@@ -239,6 +239,15 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
+@@ -258,6 +258,15 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
              continue;
          }
  #endif
@@ -895,7 +895,7 @@ index 36ba1f3..e9e7405 100644
  
          ConfigurationShared::Widget* widget = [&]() {
              if (setting->Id() == Settings::values.fsr_sharpening_slider.Id()) {
-@@ -342,7 +351,15 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
+@@ -386,7 +395,15 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
  
              hold_graphics.emplace(setting->Id(), widget);
  #endif
@@ -911,9 +911,9 @@ index 36ba1f3..e9e7405 100644
 +#elif defined(EGLANTINE_STREAMLINE)
          } else if (setting->Id() == Settings::values.nvidia_dlss.Id()) {
              nvidia_dlss_checkbox = widget->checkbox;
-             // NVIDIA's files and a download button under the checkbox.
+             nvidia_dlss_widget = widget;
 diff --git a/src/yuzu/configuration/nvidia_dlss_panel.cpp b/src/yuzu/configuration/nvidia_dlss_panel.cpp
-index 45a2504..01dce62 100644
+index d8c6803..6b19941 100644
 --- a/src/yuzu/configuration/nvidia_dlss_panel.cpp
 +++ b/src/yuzu/configuration/nvidia_dlss_panel.cpp
 @@ -1,7 +1,7 @@
