@@ -1,8 +1,8 @@
 diff --git a/src/yuzu/main_window.cpp b/src/yuzu/main_window.cpp
-index 6b228b5..4fd1797 100644
+index f39fc87..229f688 100644
 --- a/src/yuzu/main_window.cpp
 +++ b/src/yuzu/main_window.cpp
-@@ -473,6 +473,92 @@ inline static bool isDarkMode() {
+@@ -479,6 +479,92 @@ inline static bool isDarkMode() {
  }
  #endif // _WIN32
  
@@ -95,13 +95,13 @@ index 6b228b5..4fd1797 100644
  MainWindow::MainWindow(bool has_broken_vulkan)
      : ui{std::make_unique<Ui::MainWindow>()},
        input_subsystem{std::make_shared<InputCommon::InputSubsystem>()}, user_data_migrator{this} {
-@@ -480,6 +566,9 @@ MainWindow::MainWindow(bool has_broken_vulkan)
+@@ -486,6 +572,9 @@ MainWindow::MainWindow(bool has_broken_vulkan)
  
      Common::FS::CreateEdenPaths();
      this->config = std::make_unique<QtConfig>();
 +#ifdef __linux__
 +    ImportLegacyShaderCaches();
 +#endif
-     MigrateFriztiSettings();
+     MigrateFriztiSettings(FriztiStart::AskFirst);
      // New mods start disabled: saved at once (from the GUI thread), so a crash keeps it.
      FileSys::PatchManager::SetNewModsCallback([this](u64 title_id) {
