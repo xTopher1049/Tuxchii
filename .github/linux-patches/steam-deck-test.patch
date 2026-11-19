@@ -1,8 +1,8 @@
 diff --git a/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp b/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp
-index 40613f31d9..ca31a099fd 100644
+index f3aa1a1..55e6377 100644
 --- a/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp
 +++ b/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp
-@@ -3564,7 +3564,15 @@ void PipelineCache::StartPrecompiled(u64 title_id, const std::filesystem::path&
+@@ -5113,7 +5113,15 @@ void PipelineCache::StartPrecompiled(u64 title_id, const std::filesystem::path&
      }
      // The prepared pipelines are kept by the driver's own cache. Without one they would go to the
      // emulator's pipeline cache file, which is loaded whole at boot: only on request there.
@@ -20,7 +20,7 @@ index 40613f31d9..ca31a099fd 100644
                                  "of its own (EDEN_NX2_PRECOMPILE=2 prepares them anyway)");
          return;
 diff --git a/src/yuzu/fritchii/main_window_fritchii.cpp b/src/yuzu/fritchii/main_window_fritchii.cpp
-index 7702ae42b9..3faf706c50 100644
+index b5f55bc..d1482b7 100644
 --- a/src/yuzu/fritchii/main_window_fritchii.cpp
 +++ b/src/yuzu/fritchii/main_window_fritchii.cpp
 @@ -26,6 +26,9 @@
@@ -47,7 +47,7 @@ index 7702ae42b9..3faf706c50 100644
      auto* gate = new FritchiiUi::PrecompileGate(
          this, statusBar(),
 diff --git a/src/yuzu/main_window.cpp b/src/yuzu/main_window.cpp
-index cc2ba56561..28497a9772 100644
+index e599ab6..912e281 100644
 --- a/src/yuzu/main_window.cpp
 +++ b/src/yuzu/main_window.cpp
 @@ -9,6 +9,7 @@
@@ -58,7 +58,7 @@ index cc2ba56561..28497a9772 100644
  #include "common/fs/path_util.h"
  #include "common/game_presets.h"
  #include "common/shutdown_progress.h"
-@@ -653,6 +654,24 @@ void MainWindow::MigrateFriztiSettings() {
+@@ -903,6 +904,24 @@ void MainWindow::MigrateFriztiSettings() {
      for (auto& change : Frizti::FixDockedController(Settings::values)) {
          changes.push_back(std::move(change));
      }
@@ -84,13 +84,13 @@ index cc2ba56561..28497a9772 100644
      // Ocarina's per-game config, loaded as a game boot does.
      std::map<std::string, std::string> per_game;
 diff --git a/src/yuzu/main_window.h b/src/yuzu/main_window.h
-index 871f4ed867..72c8300067 100644
+index e3ecbd3..81417b1 100644
 --- a/src/yuzu/main_window.h
 +++ b/src/yuzu/main_window.h
-@@ -411,6 +411,7 @@ private slots:
-     void ShowErrorWithExportLog(const QString& title, const QString& text);
-     /// The Fritchii look (fritchii/main_window_fritchii.cpp); nothing in Lichii builds.
-     void SetUpFritchiiUi();
+@@ -426,6 +426,7 @@ private slots:
+     void SetUpProfilingMode();
+     /// Tools > Switches (fritchii/switches_window): the player's nx2_switches.txt.
+     void SetUpSwitchesWindow();
 +    void SetUpPrecompileGate();
      void OnVerifyInstalledContents();
      void OnInstallFirmware();
