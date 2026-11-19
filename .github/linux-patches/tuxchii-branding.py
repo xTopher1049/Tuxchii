@@ -26,12 +26,17 @@ PROTECT = [
     r"Fritchii-v", r"Fritchii #\d", r"Lichii#\d", r"Lichii contributor",
     # The community Discord and the emulators a profile can be imported from are other projects.
     r"Fritchii &?Discord",
+    # v6: links to Frizti's repo (Source Code, Help > README) must keep pointing at it.
+    r"github\.com/Frizti/Fritchii",
 ]
 
 # Files whose strings are identifiers or protocol data, never shown as the app's name.
 SKIP_FILES = {
     "src/frontend_common/update_checker.cpp", "src/frontend_common/update_checker.h",
     "src/common/net/net.cpp", "src/common/settings.cpp", "src/yuzu/fritchii/fritchii_ui.h",
+    # v6: Help > What's New shows Frizti's own release notes (credits to Lichii and others): kept
+    # as written, since they describe Fritchii's release, not this build.
+    "src/yuzu/fritchii/whats-new.md",
 }
 SKIP_DIRS = ("src/tests/", "src/dynarmic/", "src/android/", "src/web_service/")
 
