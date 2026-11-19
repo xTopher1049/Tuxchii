@@ -30,7 +30,7 @@ on:
 env:
   UPSTREAM: Frizti/Fritchii
   TAG_PREFIX: fritchii-
-  BACKFILL: 3 # how many of the newest upstream releases to check for missing builds
+  BACKFILL: 1 # only the newest upstream x/x.y release builds on its own (2026-11-18: nothing older than the newest gets published)
   # Clang for the PGO build, the same major as Fritchii's own Linux PGO job (release-binaries.yml):
   # the repo's eglantine.profdata needs a current LLVM.
   PGO_LLVM_VERSION: "23"
@@ -291,8 +291,13 @@ jobs:
 
       - name: Build
         run: |
-          cmake --build build/release --target yuzu yuzu-cmd --parallel
-          strip build/release/bin/lichii build/release/bin/eden-cli
+          # v6 dropped the command-line program (src/yuzu_cmd) from Fritchii's source: build and
+          # ship eden-cli only when the tag still has it.
+          targets=(yuzu)
+          [ -f src/yuzu_cmd/CMakeLists.txt ] && targets+=(yuzu-cmd)
+          cmake --build build/release --target "${targets[@]}" --parallel
+          strip build/release/bin/lichii
+          [ -x build/release/bin/eden-cli ] && strip build/release/bin/eden-cli
           ccache -s || true
 
       # Saved even when the build fails, so a re-run picks up where it stopped.
@@ -373,9 +378,11 @@ jobs:
           for lib in libusb-1.0.so.0 libOpenGL.so.0 libfribidi.so.0 libcom_err.so.2 libgpg-error.so.0; do
             [ -e "/usr/lib/x86_64-linux-gnu/$lib" ] && extra_libs+=(--library "/usr/lib/x86_64-linux-gnu/$lib")
           done
+          cli=()
+          [ -x build/release/bin/eden-cli ] && cli=(--executable build/release/bin/eden-cli)
           "$tools/linuxdeploy-x86_64.AppImage" --appdir AppDir \
             --executable build/release/bin/lichii \
-            --executable build/release/bin/eden-cli \
+            "${cli[@]}" \
             "${dlss_tools[@]}" \
             --desktop-file dist/io.github.zortos293.lichii.desktop \
             --icon-file "$icon" \
@@ -506,6 +513,10 @@ jobs:
               bullets += (f"- **Shader setup on a game's first launch:** Tuxchii offers to pre-build all of the game's shaders before you play (much smoother, "
                           f"about 20 minutes or more). The game starts paused while they build and tells you when it's ready "
                           f"([patch]({link('shader-setup-prompt.patch')}))\n")
+          if "radv-mesh-sgpr-workaround.patch" in applied:
+              bullets += (f"- **No GPU hang on AMD RX 7000/9000 with Mesa older than 26.2.5:** works around a RADV bug that froze the GPU "
+                          f"on mesh-shader draws (backport of [zortos293/Lichii#1203](https://github.com/zortos293/Lichii/pull/1203); "
+                          f"[patch]({link('radv-mesh-sgpr-workaround.patch')}))\n")
           if "shader-cache-import.patch" in applied:
               bullets += (f"- **Your shader cache comes along:** v5.8 moved Fritchii's folders from `eden` to `fritchii` and copies settings, saves and keys, "
                           f"but not caches. This build also copies each game's shader cache from `~/.cache/eden` (or Lichii's) to `~/.cache/fritchii` once, "
