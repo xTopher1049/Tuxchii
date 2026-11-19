@@ -27,6 +27,12 @@ on:
         type: boolean
         default: false
 
+# One run at a time, queued: a run decides what to build only after the previous one has published
+# (2026-11-19: a scheduled run decided while a manual v6.2 build was running, then built it again).
+concurrency:
+  group: appimage-auto-release
+  cancel-in-progress: false
+
 env:
   UPSTREAM: Frizti/Fritchii
   TAG_PREFIX: fritchii-
