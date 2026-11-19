@@ -1,20 +1,20 @@
 diff --git a/src/yuzu/CMakeLists.txt b/src/yuzu/CMakeLists.txt
-index 3528b26c41..a24869e221 100644
+index 50b4e7a..369e9e0 100644
 --- a/src/yuzu/CMakeLists.txt
 +++ b/src/yuzu/CMakeLists.txt
-@@ -261,6 +261,7 @@ add_executable(yuzu
- 
+@@ -274,6 +274,7 @@ add_executable(yuzu
      render/performance_overlay.h render/performance_overlay.cpp render/performance_overlay.ui
+     render/frame_budget_view.h
      updater/update_dialog.h updater/update_dialog.cpp updater/update_dialog.ui
 +    tuxchii_updater.h tuxchii_updater.cpp
      game/common.h
      game/carousel.h game/carousel.cpp
  )
 diff --git a/src/yuzu/main_window.cpp b/src/yuzu/main_window.cpp
-index 571509f89d..085d961433 100644
+index 912e281..a86ef73 100644
 --- a/src/yuzu/main_window.cpp
 +++ b/src/yuzu/main_window.cpp
-@@ -138,6 +138,7 @@ static FileSys::VirtualFile VfsDirectoryCreateFileWrapper(const FileSys::Virtual
+@@ -144,6 +144,7 @@ static FileSys::VirtualFile VfsDirectoryCreateFileWrapper(const FileSys::Virtual
  
  #ifdef ENABLE_UPDATE_CHECKER
  #include "frontend_common/update_checker.h"
@@ -22,7 +22,7 @@ index 571509f89d..085d961433 100644
  #endif
  
  // Common //
-@@ -5275,6 +5276,12 @@ void MainWindow::OnCaptureScreenshot() {
+@@ -5601,6 +5602,12 @@ void MainWindow::OnCaptureScreenshot() {
  
  #ifdef ENABLE_UPDATE_CHECKER
  void MainWindow::StartUpdateCheck(bool manual) {
@@ -37,7 +37,7 @@ index 571509f89d..085d961433 100644
          return;
 diff --git a/src/yuzu/tuxchii_updater.cpp b/src/yuzu/tuxchii_updater.cpp
 new file mode 100644
-index 0000000000..6de0424bb6
+index 0000000..6de0424
 --- /dev/null
 +++ b/src/yuzu/tuxchii_updater.cpp
 @@ -0,0 +1,605 @@
@@ -648,7 +648,7 @@ index 0000000000..6de0424bb6
 +#endif
 diff --git a/src/yuzu/tuxchii_updater.h b/src/yuzu/tuxchii_updater.h
 new file mode 100644
-index 0000000000..2e1f356ed2
+index 0000000..2e1f356
 --- /dev/null
 +++ b/src/yuzu/tuxchii_updater.h
 @@ -0,0 +1,20 @@
