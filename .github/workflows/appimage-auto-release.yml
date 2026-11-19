@@ -205,6 +205,10 @@ jobs:
       # where its pattern is present, so a release that fixes it upstream just skips the patch.
       - name: Apply Linux build patches
         run: |
+          # 0. Fritchii's "Preparing shaders" stamp of the untouched upstream source (v6.2+ stops the
+          #    build on unknown stamps; shader-stamp.py registers a Tuxchii one after the patches).
+          stamp_tool=_linux-patches/.github/linux-patches/shader-stamp.py
+          [ -f "$stamp_tool" ] && python3 "$stamp_tool" upstream "$RUNNER_TEMP/shader-stamp"
           # 1. X11's Xlib.h does "#define Status int", which breaks VideoCommon's Status enum.
           f=src/video_core/vulkan_common/vulkan.h
           grep -q '^#undef Status' "$f" || sed -i 's/^#undef True$/#undef True\n#undef Status/' "$f"
@@ -275,6 +279,9 @@ jobs:
           if [ -f "$b" ]; then
             python3 "$b" . | tail -n 60
             echo "TUXCHII_BRANDING=1" >> "$GITHUB_ENV"
+          fi
+          if [ -f "$stamp_tool" ]; then
+            python3 "$stamp_tool" register "$RUNNER_TEMP/shader-stamp" "$PWD"/_linux-patches/.github/linux-patches/*.patch
           fi
           git diff --stat
 
